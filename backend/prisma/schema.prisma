@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  admin
+  manager
+  team_member
+}
+
+enum EngagementStatus {
+  draft
+  active
+  completed
+  cancelled
+}
+
+enum TaskStatus {
+  not_started
+  in_progress
+  waiting_for_client
+  ready_for_review
+  changes_requested
+  completed
+  cancelled
+}
+
+enum RecurrenceInterval {
+  monthly
+  quarterly
+  yearly
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String?
+  role         UserRole  @default(team_member)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdClients       Client[]         @relation("ClientCreator")
+  managedEngagements   Engagement[]     @relation("EngagementManager")
+  createdEngagements   Engagement[]     @relation("EngagementCreator")
+  assignedTasks        Task[]           @relation("TaskAssignee")
+  reviewedTasks        Task[]           @relation("TaskReviewer")
+  createdTasks         Task[]           @relation("TaskCreator")
+  activities           TaskActivity[]   @relation("ActorActivity")
+
+  @@index([role])
+}
+
+model Client {
+  id           String       @id @default(uuid())
+  name         String
+  contactEmail String?
+  phone        String?
+  status       String       @default("active")
+  createdById  String?
+  createdBy    User?        @relation("ClientCreator", fields: [createdById], references: [id])
+  engagements  Engagement[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model ServiceType {
+  id                 String              @id @default(uuid())
+  name               String
+  code               String              @unique
+  description        String?
+  isRecurring        Boolean             @default(false)
+  recurrenceInterval RecurrenceInterval?
+  isActive           Boolean             @default(true)
+  templates          TaskTemplate[]
+  engagements        Engagement[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model TaskTemplate {
+  id                         String       @id @default(uuid())
+  serviceTypeId              String
+  serviceType                ServiceType  @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  title                      String
+  description                String?
+  orderIndex                 Int          @default(0)
+  offsetDaysFromPeriodStart  Int          @default(0)
+  defaultAssigneeRole        UserRole?
+  requiresReview             Boolean      @default(true)
+  isActive                   Boolean      @default(true)
+  tasks                      Task[]
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+
+  @@index([serviceTypeId, orderIndex])
+}
+
+model Engagement {
+  id                 String            @id @default(uuid())
+  clientId           String
+  client             Client            @relation(fields: [clientId], references: [id])
+  serviceTypeId      String
+  serviceType        ServiceType       @relation(fields: [serviceTypeId], references: [id])
+  title              String
+  description        String?
+  periodStart        DateTime
+  periodEnd          DateTime
+  periodKey          String
+  status             EngagementStatus  @default(active)
+  managerId          String?
+  manager            User?             @relation("EngagementManager", fields: [managerId], references: [id])
+  isRecurring        Boolean           @default(false)
+  parentEngagementId String?
+  parentEngagement   Engagement?       @relation("EngagementHistory", fields: [parentEngagementId], references: [id])
+  childEngagements   Engagement[]      @relation("EngagementHistory")
+  createdById        String?
+  createdBy          User?             @relation("EngagementCreator", fields: [createdById], references: [id])
+  tasks              Task[]
+  automationLogs     AutomationLog[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@unique([clientId, serviceTypeId, periodKey])
+}
+
+model Task {
+  id           String        @id @default(uuid())
+  engagementId String
+  engagement   Engagement    @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  templateId   String?
+  template     TaskTemplate? @relation(fields: [templateId], references: [id])
+  title        String
+  description  String?
+  assigneeId   String?
+  assignee     User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reviewerId   String?
+  reviewer     User?         @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  status       TaskStatus    @default(not_started)
+  dueDate      DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdById  String?
+  createdBy    User?         @relation("TaskCreator", fields: [createdById], references: [id])
+  activities   TaskActivity[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([engagementId, templateId])
+  @@index([assigneeId, status, dueDate])
+  @@index([reviewerId, status])
+  @@index([engagementId])
+  @@index([status, dueDate])
+}
+
+model TaskActivity {
+  id         String      @id @default(uuid())
+  taskId     String
+  task       Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actor      User?       @relation("ActorActivity", fields: [actorId], references: [id])
+  fromStatus TaskStatus?
+  toStatus   TaskStatus?
+  action     String
+  comment    String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([taskId, createdAt(sort: Desc)])
+}
+
+model AutomationLog {
+  id           String      @id @default(uuid())
+  runAt        DateTime    @default(now())
+  engagementId String?
+  engagement   Engagement? @relation(fields: [engagementId], references: [id])
+  status       String
+  message      String
+}
