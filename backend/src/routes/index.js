@@ -27,7 +27,7 @@ apiRouter.use('/tasks', taskRoutes);
 apiRouter.use('/dashboard', dashboardRoutes);
 apiRouter.use('/internal', internalRoutes);
 
-// API Health check
-apiRouter.get('/health', healthController.getHealth);
+// API Health check with database connectivity probe
+apiRouter.get('/health', healthController.getDetailedHealth);
 
 export default apiRouter;

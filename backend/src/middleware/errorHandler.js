@@ -46,6 +46,30 @@ export function errorHandler(err, req, res, next) {
     });
   }
 
+  // Prisma table does not exist (migrations not run) code P2021
+  if (err.code === 'P2021') {
+    console.error(`[Prisma Schema Error] Missing table:`, err.message);
+    return res.status(500).json({
+      error: 'Database schema is not initialized. Please run: npm run migrate:deploy'
+    });
+  }
+
+  // Prisma connection failure
+  if (err.name === 'PrismaClientInitializationError') {
+    console.error(`[Prisma Connection Error]:`, err.message);
+    return res.status(503).json({
+      error: 'Database connection failed. Please verify DATABASE_URL and network configuration.'
+    });
+  }
+
+  // Prisma pool timeout code P2024
+  if (err.code === 'P2024') {
+    console.error(`[Prisma Pool Timeout]:`, err.message);
+    return res.status(503).json({
+      error: 'Database connection timed out. Please verify Neon connection pooling.'
+    });
+  }
+
   // Unhandled / server errors
   console.error(`[Error] ${req.method} ${req.originalUrl} - User: ${req.user?.id || 'anonymous'} - Details:`, err);
   return res.status(500).json({
