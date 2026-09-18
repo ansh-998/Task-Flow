@@ -17,23 +17,54 @@ import env from './config/env.js';
 
 export const app = express();
 
-// Security headers
-app.use(helmet());
+// Security headers - allow cross-origin API access for frontend SPA
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 
 // HTTP response compression
 app.use(compression());
 
-// Global CORS - locked to CLIENT_ORIGINS
-app.use(cors({
+// Origin validation supporting wildcard, configured domains, and any Vercel deployment
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // allow non-browser requests (curl, server-to-server, health probes)
+  const normalized = origin.trim().replace(/\/+$/, '').toLowerCase();
+
+  // Allow wildcard
+  if (env.CLIENT_ORIGINS.includes('*')) return true;
+
+  // Check against explicitly configured CLIENT_ORIGINS
+  if (env.CLIENT_ORIGINS.some((allowed) => allowed.toLowerCase().replace(/\/+$/, '') === normalized)) {
+    return true;
+  }
+
+  // Allow any Vercel production or preview deployment (*.vercel.app)
+  if (/^https:\/\/[a-z0-9-_.]+\.vercel\.app$/.test(normalized)) {
+    return true;
+  }
+
+  // Allow localhost for dev / testing
+  if (/^http:\/\/localhost(:\d+)?$/.test(normalized)) {
+    return true;
+  }
+
+  return false;
+};
+
+const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (env.CLIENT_ORIGINS.includes('*') || env.CLIENT_ORIGINS.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-internal-secret']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 if (env.NODE_ENV !== 'test') {
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));

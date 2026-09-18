@@ -22,7 +22,7 @@ export const env = {
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   CLIENT_ORIGINS: (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
     .filter(Boolean),
   INTERNAL_SECRET: process.env.INTERNAL_SECRET || 'super-internal-secret-token'
 };
