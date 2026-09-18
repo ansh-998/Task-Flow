@@ -23,7 +23,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-LEARN.md
 # Environment files
 .env
 .env*.local
@@ -36,5 +35,3 @@ backend/data/*.db-shm
 
 # Frontend Build
 frontend/dist/
-
-deployment.md
