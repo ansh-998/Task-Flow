@@ -180,7 +180,7 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 style={{ flex: 1 }}
-                onClick={() => handleQuickLogin('admin@taskflow.dev')}
+                onClick={() => handleQuickLogin('admin@taskflow.com')}
                 disabled={isSubmitting}
               >
                 Admin
@@ -189,7 +189,7 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 style={{ flex: 1 }}
-                onClick={() => handleQuickLogin('sarah.manager@taskflow.dev')}
+                onClick={() => handleQuickLogin('manager1@taskflow.com')}
                 disabled={isSubmitting}
               >
                 Manager
@@ -198,7 +198,7 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 style={{ flex: 1 }}
-                onClick={() => handleQuickLogin('alice.member@taskflow.dev')}
+                onClick={() => handleQuickLogin('member1@taskflow.com')}
                 disabled={isSubmitting}
               >
                 Member

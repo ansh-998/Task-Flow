@@ -1,43 +1,43 @@
 // ============================================================================
-// File: server/prisma/seed.js
-// Description: Database seeder for Prisma PostgreSQL
+// File: backend/prisma/seed.js
+// Description: Database wiper & seeder for Prisma PostgreSQL
 // ============================================================================
 
 import bcrypt from 'bcryptjs';
 import prisma from '../src/config/prisma.js';
-import { computePeriodKey } from '../src/utils/periodKey.js';
 
 export async function seed() {
-  console.log('Seeding Prisma database...');
+  console.log('--- Wiping existing database records ---');
+
+  // Delete in reverse foreign key dependency order
+  await prisma.taskActivity.deleteMany();
+  await prisma.task.deleteMany();
+  await prisma.automationLog.deleteMany();
+  await prisma.engagement.deleteMany();
+  await prisma.taskTemplate.deleteMany();
+  await prisma.serviceType.deleteMany();
+  await prisma.client.deleteMany();
+  await prisma.user.deleteMany();
+
+  console.log('Database wiped successfully.');
+  console.log('--- Seeding new records ---');
 
   const passwordHash = await bcrypt.hash('password123', 10);
 
   // 1. Seed Users
   const usersData = [
-    { email: 'admin@example.com', fullName: 'Aditi Sharma', role: 'admin' },
-    { email: 'manager1@example.com', fullName: 'Rajesh Kumar', role: 'manager' },
-    { email: 'manager2@example.com', fullName: 'Pooja Verma', role: 'manager' },
-    { email: 'member1@example.com', fullName: 'Karan Patel', role: 'team_member' },
-    { email: 'member2@example.com', fullName: 'Sneha Rao', role: 'team_member' },
-    { email: 'member3@example.com', fullName: 'Vikram Singh', role: 'team_member' },
-    { email: 'member4@example.com', fullName: 'Ananya Gupta', role: 'team_member' },
-    { email: 'admin@taskflow.dev', fullName: 'Admin User', role: 'admin' },
-    { email: 'sarah.manager@taskflow.dev', fullName: 'Sarah Manager', role: 'manager' },
-    { email: 'alice.member@taskflow.dev', fullName: 'Alice Member', role: 'team_member' },
-    { email: 'bob.member@taskflow.dev', fullName: 'Bob Member', role: 'team_member' }
+    { email: 'admin@taskflow.com', fullName: 'Aditi Sharma', role: 'admin' },
+    { email: 'manager1@taskflow.com', fullName: 'Rajesh Kumar', role: 'manager' },
+    { email: 'manager2@taskflow.com', fullName: 'Pooja Verma', role: 'manager' },
+    { email: 'member1@taskflow.com', fullName: 'Karan Patel', role: 'team_member' },
+    { email: 'member2@taskflow.com', fullName: 'Sneha Rao', role: 'team_member' },
+    { email: 'member3@taskflow.com', fullName: 'Vikram Singh', role: 'team_member' }
   ];
 
   const users = {};
   for (const u of usersData) {
-    const user = await prisma.user.upsert({
-      where: { email: u.email },
-      update: {
-        fullName: u.fullName,
-        role: u.role,
-        passwordHash,
-        isActive: true
-      },
-      create: {
+    const user = await prisma.user.create({
+      data: {
         email: u.email,
         passwordHash,
         fullName: u.fullName,
@@ -46,9 +46,31 @@ export async function seed() {
       }
     });
     users[u.email] = user;
+    console.log(`Created user: ${user.fullName} (${user.email}) - ${user.role}`);
   }
 
-  // 2. Seed Service Types
+  // 2. Seed Clients
+  const clientsData = [
+    { name: 'Acme Traders', contactEmail: 'contact@acmetraders.com' },
+    { name: 'Beta Exports', contactEmail: 'finance@betaexports.com' },
+    { name: 'Nova Healthcare', contactEmail: 'accounts@novahealth.com' }
+  ];
+
+  const clients = {};
+  for (const c of clientsData) {
+    const client = await prisma.client.create({
+      data: {
+        name: c.name,
+        contactEmail: c.contactEmail,
+        status: 'active',
+        createdById: users['admin@taskflow.com'].id
+      }
+    });
+    clients[c.name] = client;
+    console.log(`Created client: ${client.name} (${client.contactEmail})`);
+  }
+
+  // 3. Seed Service Types
   const serviceTypesData = [
     {
       name: 'Monthly GST Compliance',
@@ -75,27 +97,19 @@ export async function seed() {
 
   const services = {};
   for (const s of serviceTypesData) {
-    const service = await prisma.serviceType.upsert({
-      where: { code: s.code },
-      update: {
-        name: s.name,
-        description: s.description,
-        isRecurring: s.isRecurring,
-        recurrenceInterval: s.recurrenceInterval,
-        isActive: true
-      },
-      create: s
+    const service = await prisma.serviceType.create({
+      data: s
     });
     services[s.code] = service;
+    console.log(`Created service type: ${service.name} (${service.code})`);
   }
 
-  // 3. Seed Task Templates
+  // 4. Seed Task Templates
   const templatesData = [
-    // 2 for Monthly GST Compliance
     {
       serviceCode: 'GST-MONTHLY',
-      title: 'Collect client data',
-      description: 'Request purchase invoices, sales summaries, and bank ledger records',
+      title: 'Collect invoices from client',
+      description: 'Collect purchase invoices, sales summaries, and bank ledger records',
       orderIndex: 1,
       offsetDaysFromPeriodStart: 2,
       defaultAssigneeRole: 'team_member',
@@ -103,28 +117,26 @@ export async function seed() {
     },
     {
       serviceCode: 'GST-MONTHLY',
-      title: 'File GSTR-3B',
+      title: 'File GSTR-3B return',
       description: 'Reconcile 2B credit, calculate tax liability, and submit return',
       orderIndex: 2,
       offsetDaysFromPeriodStart: 15,
       defaultAssigneeRole: 'team_member',
       requiresReview: true
     },
-    // 1 for GST Registration
     {
       serviceCode: 'GST-REG',
-      title: 'Draft and file REG-01 application',
+      title: 'Submit REG-01 application',
       description: 'Collect rental agreement, KYC, and upload on portal for ARN generation',
       orderIndex: 1,
       offsetDaysFromPeriodStart: 5,
       defaultAssigneeRole: 'team_member',
       requiresReview: true
     },
-    // 1 for GST Refund
     {
       serviceCode: 'GST-REFUND',
-      title: 'Reconcile input tax credits and file RFD-01',
-      description: 'Verify Statement 1A, calculate refund entitlement, and submit',
+      title: 'File RFD-01 with documents',
+      description: 'Verify Statement 1A, calculate refund entitlement, and submit RFD-01',
       orderIndex: 1,
       offsetDaysFromPeriodStart: 10,
       defaultAssigneeRole: 'team_member',
@@ -132,223 +144,259 @@ export async function seed() {
     }
   ];
 
-  const templates = [];
+  const templates = {};
   for (const t of templatesData) {
-    const existing = await prisma.taskTemplate.findFirst({
-      where: {
+    const template = await prisma.taskTemplate.create({
+      data: {
         serviceTypeId: services[t.serviceCode].id,
-        title: t.title
+        title: t.title,
+        description: t.description,
+        orderIndex: t.orderIndex,
+        offsetDaysFromPeriodStart: t.offsetDaysFromPeriodStart,
+        defaultAssigneeRole: t.defaultAssigneeRole,
+        requiresReview: t.requiresReview,
+        isActive: true
       }
     });
-
-    if (existing) {
-      templates.push(existing);
-    } else {
-      const created = await prisma.taskTemplate.create({
-        data: {
-          serviceTypeId: services[t.serviceCode].id,
-          title: t.title,
-          description: t.description,
-          orderIndex: t.orderIndex,
-          offsetDaysFromPeriodStart: t.offsetDaysFromPeriodStart,
-          defaultAssigneeRole: t.defaultAssigneeRole,
-          requiresReview: t.requiresReview,
-          isActive: true
-        }
-      });
-      templates.push(created);
-    }
+    templates[`${t.serviceCode}_${t.title}`] = template;
+    console.log(`Created template: ${template.title} for ${t.serviceCode}`);
   }
 
-  // 4. Seed 5 Clients
-  const clientsData = [
-    { name: 'Acme Traders', contactEmail: 'contact@acmetraders.com', phone: '+1-555-0101' },
-    { name: 'Beta Exports', contactEmail: 'finance@betaexports.com', phone: '+1-555-0102' },
-    { name: 'Apex Logistics', contactEmail: 'ops@apexlogistics.com', phone: '+1-555-0103' },
-    { name: 'Nova Healthcare', contactEmail: 'accounts@novahealth.com', phone: '+1-555-0104' },
-    { name: 'Zenith Tech', contactEmail: 'billing@zenithtech.io', phone: '+1-555-0105' }
-  ];
-
-  const clients = [];
-  for (const c of clientsData) {
-    const existing = await prisma.client.findFirst({
-      where: { name: c.name }
-    });
-
-    if (existing) {
-      clients.push(existing);
-    } else {
-      const created = await prisma.client.create({
-        data: {
-          ...c,
-          status: 'active',
-          createdById: users['admin@example.com'].id
-        }
-      });
-      clients.push(created);
-    }
-  }
-
-  // 5. Seed 4 Engagements (2 recurring, 2 one-time)
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1;
-  const currentPeriodKey = `${year}-${String(month).padStart(2, '0')}`;
-  const periodStart = new Date(Date.UTC(year, month - 1, 1));
-  const periodEnd = new Date(Date.UTC(year, month, 0));
+  // 5. Seed Engagements (Period: Sep 2026)
+  const periodKey = '2026-09';
+  const periodStart = new Date(Date.UTC(2026, 8, 1));
+  const periodEnd = new Date(Date.UTC(2026, 8, 30, 23, 59, 59, 999));
 
   const engagementsData = [
-    // 2 Recurring
     {
-      clientId: clients[0].id,
-      serviceTypeId: services['GST-MONTHLY'].id,
-      title: 'Acme Traders — Monthly GST Compliance',
-      description: 'Monthly recurring GST compliance for current filing period',
-      periodStart,
-      periodEnd,
-      periodKey: currentPeriodKey,
-      managerId: users['manager1@example.com'].id,
+      clientName: 'Acme Traders',
+      serviceCode: 'GST-MONTHLY',
+      title: 'Acme Traders — Monthly GST Compliance (Sep 2026)',
+      managerEmail: 'manager1@taskflow.com',
       isRecurring: true
     },
     {
-      clientId: clients[1].id,
-      serviceTypeId: services['GST-MONTHLY'].id,
-      title: 'Beta Exports — Monthly GST Compliance',
-      description: 'Monthly recurring GST compliance for export deliveries',
-      periodStart,
-      periodEnd,
-      periodKey: currentPeriodKey,
-      managerId: users['manager2@example.com'].id,
-      isRecurring: true
-    },
-    // 2 One-Time
-    {
-      clientId: clients[2].id,
-      serviceTypeId: services['GST-REG'].id,
-      title: 'Apex Logistics — Branch GST Registration',
-      description: 'Special ad-hoc state branch registration',
-      periodStart: new Date(Date.UTC(2026, 8, 1)),
-      periodEnd: new Date(Date.UTC(2026, 8, 30)),
-      periodKey: '2026-09-REG',
-      managerId: users['manager1@example.com'].id,
+      clientName: 'Beta Exports',
+      serviceCode: 'GST-REG',
+      title: 'Beta Exports — GST Registration (Sep 2026)',
+      managerEmail: 'manager2@taskflow.com',
       isRecurring: false
     },
     {
-      clientId: clients[3].id,
-      serviceTypeId: services['GST-REFUND'].id,
-      title: 'Nova Healthcare — Inverted Duty GST Refund',
-      description: 'Quarterly refund claim under inverted duty tariff structure',
-      periodStart: new Date(Date.UTC(2026, 8, 1)),
-      periodEnd: new Date(Date.UTC(2026, 8, 30)),
-      periodKey: '2026-09-REFUND',
-      managerId: users['manager2@example.com'].id,
+      clientName: 'Nova Healthcare',
+      serviceCode: 'GST-REFUND',
+      title: 'Nova Healthcare — GST Refund (Sep 2026)',
+      managerEmail: 'manager1@taskflow.com',
       isRecurring: false
     }
   ];
 
-  const engagements = [];
+  const engagements = {};
   for (const e of engagementsData) {
-    const existing = await prisma.engagement.findUnique({
-      where: {
-        clientId_serviceTypeId_periodKey: {
-          clientId: e.clientId,
-          serviceTypeId: e.serviceTypeId,
-          periodKey: e.periodKey
-        }
+    const eng = await prisma.engagement.create({
+      data: {
+        clientId: clients[e.clientName].id,
+        serviceTypeId: services[e.serviceCode].id,
+        title: e.title,
+        periodStart,
+        periodEnd,
+        periodKey,
+        status: 'active',
+        managerId: users[e.managerEmail].id,
+        isRecurring: e.isRecurring,
+        createdById: users['admin@taskflow.com'].id
       }
     });
-
-    if (existing) {
-      engagements.push(existing);
-    } else {
-      const created = await prisma.engagement.create({
-        data: {
-          ...e,
-          status: 'active',
-          createdById: users['admin@example.com'].id
-        }
-      });
-      engagements.push(created);
-    }
+    engagements[e.clientName] = eng;
+    console.log(`Created engagement: ${eng.title}`);
   }
 
-  // Helper date offset function
+  // Helper date offset function for dynamic relative dates
   const offsetDate = (days) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
     return d;
   };
 
-  // 6. Seed 20+ Tasks with mixed statuses and due dates
+  // 6. Seed Tasks
+  // Exact user specification:
+  // 1: Collect invoices from client | Acme Traders GST | Karan Patel | Rajesh Kumar | In Progress | 3 days ago (overdue)
+  // 2: File GSTR-3B return | Acme Traders GST | Sneha Rao | Rajesh Kumar | Not Started | Today
+  // 3: Submit REG-01 application | Beta Exports REG | Vikram Singh | Pooja Verma | Ready for Review | Sep 20
+  // 4: Collect KYC documents | Beta Exports REG | Karan Patel | Pooja Verma | Completed | Sep 10
+  // 5: File RFD-01 with documents | Nova Healthcare REFUND | Sneha Rao | Rajesh Kumar | Waiting for Client | Sep 22
+  // 6: Prepare refund calculation | Nova Healthcare REFUND | Vikram Singh | Rajesh Kumar | Changes Requested | Sep 18 (Future relative to today to maintain Open=5, Overdue=1)
+
   const tasksSeed = [
-    // Engagement 1 (Acme Traders)
-    { engIndex: 0, title: 'Collect client data', assignee: 'member1@example.com', reviewer: 'manager1@example.com', status: 'in_progress', due: offsetDate(-3) },
-    { engIndex: 0, title: 'File GSTR-3B', assignee: 'member1@example.com', reviewer: 'manager1@example.com', status: 'not_started', due: offsetDate(0) },
-    { engIndex: 0, title: 'Resolve vendor mismatched credits', assignee: 'member1@example.com', reviewer: 'manager1@example.com', status: 'waiting_for_client', due: offsetDate(2) },
-    { engIndex: 0, title: 'Draft GSTR-3B tax computation', assignee: 'member2@example.com', reviewer: 'manager1@example.com', status: 'ready_for_review', due: offsetDate(4) },
-    { engIndex: 0, title: 'Verify electronic cash ledger balance', assignee: 'member3@example.com', reviewer: 'manager1@example.com', status: 'in_progress', due: offsetDate(-4) },
-    { engIndex: 0, title: 'Quarterly compliance summary dispatch', assignee: 'member3@example.com', reviewer: 'manager1@example.com', status: 'not_started', due: offsetDate(15) },
-
-    // Engagement 2 (Beta Exports)
-    { engIndex: 1, title: 'Collect client data', assignee: 'member2@example.com', reviewer: 'manager2@example.com', status: 'in_progress', due: offsetDate(1) },
-    { engIndex: 1, title: 'File GSTR-3B', assignee: 'member2@example.com', reviewer: 'manager2@example.com', status: 'not_started', due: offsetDate(12) },
-    { engIndex: 1, title: 'Verify BRC and FIRC documents', assignee: 'member3@example.com', reviewer: 'manager2@example.com', status: 'waiting_for_client', due: offsetDate(-1) },
-    { engIndex: 1, title: 'Verify GST tax challan payment', assignee: 'member3@example.com', reviewer: 'manager2@example.com', status: 'ready_for_review', due: offsetDate(3) },
-    { engIndex: 1, title: 'Export turnover reconciliation with EDPMS', assignee: 'member4@example.com', reviewer: 'manager2@example.com', status: 'in_progress', due: offsetDate(6) },
-    { engIndex: 1, title: 'Archival of client acknowledgment receipts', assignee: 'member4@example.com', reviewer: 'manager2@example.com', status: 'completed', due: offsetDate(-12) },
-
-    // Engagement 3 (Apex Logistics)
-    { engIndex: 2, title: 'Draft and file REG-01 application', assignee: 'member3@example.com', reviewer: 'manager1@example.com', status: 'completed', due: offsetDate(-7) },
-    { engIndex: 2, title: 'Collate rental agreement & electricity bill', assignee: 'member3@example.com', reviewer: 'manager1@example.com', status: 'completed', due: offsetDate(-5) },
-    { engIndex: 2, title: 'Complete promoter Aadhaar OTP authentication', assignee: 'member4@example.com', reviewer: 'manager1@example.com', status: 'changes_requested', due: offsetDate(-2) },
-    { engIndex: 2, title: 'Respond to officer clarification notice', assignee: 'member4@example.com', reviewer: 'manager1@example.com', status: 'in_progress', due: offsetDate(2) },
-    { engIndex: 2, title: 'Verify authorized representative authorization letter', assignee: 'member1@example.com', reviewer: 'manager1@example.com', status: 'completed', due: offsetDate(-10) },
-
-    // Engagement 4 (Nova Healthcare)
-    { engIndex: 3, title: 'Reconcile input tax credits and file RFD-01', assignee: 'member4@example.com', reviewer: 'manager2@example.com', status: 'not_started', due: offsetDate(0) },
-    { engIndex: 3, title: 'Calculate inverted duty refund entitlement', assignee: 'member1@example.com', reviewer: 'manager2@example.com', status: 'ready_for_review', due: offsetDate(1) },
-    { engIndex: 3, title: 'Client sign-off on refund annexure', assignee: 'member1@example.com', reviewer: 'manager2@example.com', status: 'waiting_for_client', due: offsetDate(5) },
-    { engIndex: 3, title: 'File online application in RFD-01 portal', assignee: 'member2@example.com', reviewer: 'manager2@example.com', status: 'not_started', due: offsetDate(8) },
-    { engIndex: 3, title: 'Compile supplier 2A/2B verification annexure', assignee: 'member2@example.com', reviewer: 'manager2@example.com', status: 'ready_for_review', due: offsetDate(2) }
+    {
+      clientKey: 'Acme Traders',
+      templateKey: 'GST-MONTHLY_Collect invoices from client',
+      title: 'Collect invoices from client',
+      description: 'Collect purchase invoices, sales summaries, and bank ledger records',
+      assigneeEmail: 'member1@taskflow.com',
+      reviewerEmail: 'manager1@taskflow.com',
+      status: 'in_progress',
+      dueDate: offsetDate(-3),
+      startedAt: offsetDate(-5),
+      completedAt: null
+    },
+    {
+      clientKey: 'Acme Traders',
+      templateKey: 'GST-MONTHLY_File GSTR-3B return',
+      title: 'File GSTR-3B return',
+      description: 'Reconcile 2B credit, calculate tax liability, and submit return',
+      assigneeEmail: 'member2@taskflow.com',
+      reviewerEmail: 'manager1@taskflow.com',
+      status: 'not_started',
+      dueDate: offsetDate(0),
+      startedAt: null,
+      completedAt: null
+    },
+    {
+      clientKey: 'Beta Exports',
+      templateKey: 'GST-REG_Submit REG-01 application',
+      title: 'Submit REG-01 application',
+      description: 'Prepare KYC documents, rental agreement, and submit REG-01 on portal',
+      assigneeEmail: 'member3@taskflow.com',
+      reviewerEmail: 'manager2@taskflow.com',
+      status: 'ready_for_review',
+      dueDate: offsetDate(1),
+      startedAt: offsetDate(-4),
+      completedAt: null
+    },
+    {
+      clientKey: 'Beta Exports',
+      templateKey: null,
+      title: 'Collect KYC documents',
+      description: 'Collect director PAN, Aadhaar, and electricity bill for branch registration',
+      assigneeEmail: 'member1@taskflow.com',
+      reviewerEmail: 'manager2@taskflow.com',
+      status: 'completed',
+      dueDate: offsetDate(-9),
+      startedAt: offsetDate(-12),
+      completedAt: offsetDate(-9)
+    },
+    {
+      clientKey: 'Nova Healthcare',
+      templateKey: 'GST-REFUND_File RFD-01 with documents',
+      title: 'File RFD-01 with documents',
+      description: 'Verify Statement 1A, calculate refund entitlement, and submit RFD-01',
+      assigneeEmail: 'member2@taskflow.com',
+      reviewerEmail: 'manager1@taskflow.com',
+      status: 'waiting_for_client',
+      dueDate: offsetDate(3),
+      startedAt: offsetDate(-2),
+      completedAt: null
+    },
+    {
+      clientKey: 'Nova Healthcare',
+      templateKey: null,
+      title: 'Prepare refund calculation',
+      description: 'Prepare reconciliation statement between books and GSTR-2B for inverted duty claim',
+      assigneeEmail: 'member3@taskflow.com',
+      reviewerEmail: 'manager1@taskflow.com',
+      status: 'changes_requested',
+      dueDate: offsetDate(2),
+      startedAt: offsetDate(-3),
+      completedAt: null
+    }
   ];
 
   for (const t of tasksSeed) {
-    const eng = engagements[t.engIndex];
-    const existing = await prisma.task.findFirst({
-      where: {
+    const eng = engagements[t.clientKey];
+    const template = t.templateKey ? templates[t.templateKey] : null;
+
+    const task = await prisma.task.create({
+      data: {
         engagementId: eng.id,
-        title: t.title
+        templateId: template ? template.id : null,
+        title: t.title,
+        description: t.description,
+        assigneeId: users[t.assigneeEmail].id,
+        reviewerId: users[t.reviewerEmail].id,
+        status: t.status,
+        dueDate: t.dueDate,
+        startedAt: t.startedAt,
+        completedAt: t.completedAt,
+        createdById: users['admin@taskflow.com'].id
       }
     });
 
-    if (!existing) {
-      const created = await prisma.task.create({
-        data: {
-          engagementId: eng.id,
-          title: t.title,
-          description: `Standard workflow instructions for ${t.title}`,
-          assigneeId: users[t.assignee].id,
-          reviewerId: users[t.reviewer].id,
-          status: t.status,
-          dueDate: t.due,
-          createdById: users['admin@example.com'].id
-        }
-      });
+    // Create activity logs based on status
+    await prisma.taskActivity.create({
+      data: {
+        taskId: task.id,
+        actorId: users['admin@taskflow.com'].id,
+        fromStatus: null,
+        toStatus: 'not_started',
+        action: 'created',
+        comment: 'Initialized from demonstration seed'
+      }
+    });
 
+    if (t.status === 'in_progress') {
       await prisma.taskActivity.create({
         data: {
-          taskId: created.id,
-          actorId: users['admin@example.com'].id,
-          fromStatus: null,
-          toStatus: t.status,
-          action: 'created',
-          comment: 'Initialized from demonstration seed'
+          taskId: task.id,
+          actorId: users[t.assigneeEmail].id,
+          fromStatus: 'not_started',
+          toStatus: 'in_progress',
+          action: 'status_change',
+          comment: 'Started document collection'
+        }
+      });
+    } else if (t.status === 'ready_for_review') {
+      await prisma.taskActivity.create({
+        data: {
+          taskId: task.id,
+          actorId: users[t.assigneeEmail].id,
+          fromStatus: 'in_progress',
+          toStatus: 'ready_for_review',
+          action: 'status_change',
+          comment: 'Application drafted and ready for review'
+        }
+      });
+    } else if (t.status === 'completed') {
+      await prisma.taskActivity.create({
+        data: {
+          taskId: task.id,
+          actorId: users[t.reviewerEmail].id,
+          fromStatus: 'ready_for_review',
+          toStatus: 'completed',
+          action: 'review',
+          comment: 'All KYC documents verified and approved',
+          metadata: { decision: 'approve' }
+        }
+      });
+    } else if (t.status === 'waiting_for_client') {
+      await prisma.taskActivity.create({
+        data: {
+          taskId: task.id,
+          actorId: users[t.assigneeEmail].id,
+          fromStatus: 'in_progress',
+          toStatus: 'waiting_for_client',
+          action: 'status_change',
+          comment: 'Awaiting export invoices and BRC copies from client accounts team'
+        }
+      });
+    } else if (t.status === 'changes_requested') {
+      await prisma.taskActivity.create({
+        data: {
+          taskId: task.id,
+          actorId: users[t.reviewerEmail].id,
+          fromStatus: 'ready_for_review',
+          toStatus: 'changes_requested',
+          action: 'review',
+          comment: 'Please cross-verify turnover figures with Statement 1A before final sign-off',
+          metadata: { decision: 'request_changes' }
         }
       });
     }
+
+    console.log(`Created task: "${task.title}" [${task.status}]`);
   }
 
-  console.log('Seeding completed successfully!');
+  console.log('--- Seeding completed successfully! ---');
 }
 
 // Auto-execute if run directly
