@@ -35,3 +35,5 @@ backend/data/*.db-shm
 
 # Frontend Build
 frontend/dist/
+deployment.md
+LEARN.md
